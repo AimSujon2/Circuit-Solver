@@ -72,9 +72,6 @@ details.box summary{cursor:pointer;font-weight:600}
 <button id="qz">🎯 কুইজ</button>
 <button id="sv">📥 সেভ</button>
 <button id="pdf1">📄 PDF</button>
-<button id="pdf2">📚 PDF (সব উদাহরণ)</button>
-<button id="pdf1">📄 PDF</button>
-<button id="pdfa">📚 সব উদাহরণ PDF</button>
 <button id="cfg">⚙️ ছবি-পড়ার সেটিং</button>
 <button id="hp">❓</button>
 <label class="fbtn" id="ph">📷 ছবি থেকে<input type="file" id="fi" accept="image/*" capture="environment"></label>
@@ -119,13 +116,14 @@ details.box summary{cursor:pointer;font-weight:600}
   r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':c.k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:c.m||DM.anthropic,max_tokens:3000,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:img}},{type:'text',text:prompt}]}]})});
   if(!r.ok)throw {code:'Claude HTTP '+r.status};d=await r.json();return parse(d.content.map(x=>x.text||'').join(''))}};
  const downloads={save:async({filename,data})=>{const b=data instanceof Blob?data:new Blob([data]),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);return {saved:true}}};
+ window.__localSample=sample;window.__localDownloads=downloads;
  if(!window.claude)window.claude={use:async k=>k==='sample'?sample:k==='downloads'?downloads:null};
 })();
 </script>
 <script>
 const S=50,COLS=16,ROWS=10;
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');
-let comps=[],hist=[],tool='w',start=null,cur=null,mv=false,bad=[],lastI=0,qa=0,score=0,tries=0,hl=[],STP=[],SUM=[],btok=0,bpause=false,skip=false;
+let comps=[],hist=[],tool='w',start=null,cur=null,mv=false,bad=[],lastI=0,qa=0,score=0,tries=0,hl=[],STP=[],SUM=[],SOL=null,btok=0,bpause=false,skip=false;
 const $=id=>document.getElementById(id);
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const fmt=x=>String(Number((+x).toPrecision(3)));
@@ -133,7 +131,7 @@ function msg(t,e){const m=$('msg');m.textContent=t;m.className=e?'err':''}
 function snap(e){const r=cv.getBoundingClientRect(),k=cv.width/r.width;
  return [Math.max(0,Math.min(COLS,Math.round((e.clientX-r.left)*k/S))),Math.max(0,Math.min(ROWS,Math.round((e.clientY-r.top)*k/S)))]}
 function axis(a,b){return b}
-function save(){hist.push(JSON.stringify(comps));updU();btok++;$('bd').hidden=true;hl=[];bad=[];$('sl').hidden=true;$('out').hidden=true;comps.forEach(c=>delete c.res)}
+function save(){hist.push(JSON.stringify(comps));updU();btok++;SOL=null;$('bd').hidden=true;hl=[];bad=[];$('sl').hidden=true;$('out').hidden=true;comps.forEach(c=>delete c.res)}
 function addWire(a,b){const ddx=b[0]-a[0],ddy=b[1]-a[1];if(ddx&&ddy&&Math.abs(ddx)!==Math.abs(ddy)){comps.push({t:'w',a:a.slice(),b:b.slice()});return}const dx=Math.sign(ddx),dy=Math.sign(ddy);let p=a.slice();
  while(p[0]!==b[0]||p[1]!==b[1]){const q=[p[0]+dx,p[1]+dy];comps.push({t:'w',a:p,b:q});p=q}}
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tool=b.dataset.t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b))});
@@ -164,7 +162,7 @@ cv.addEventListener('pointerup',e=>{if(!start)return;const b=axis(start,snap(e))
   return}
  msg('');draw()});
 function dseg(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1,l=dx*dx+dy*dy;let t=l?((px-x1)*dx+(py-y1)*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-x1-t*dx,py-y1-t*dy)}
-$('undo').onclick=()=>{if(!hist.length)return msg('আর পূর্বাবস্থায় ফেরার ধাপ নেই।',1);comps=JSON.parse(hist.pop());comps.forEach(c=>delete c.res);$('out').hidden=true;$('sl').hidden=true;btok++;$('bd').hidden=true;hl=[];bad=[];updU();msg('পূর্বাবস্থায় ফেরানো হয়েছে।');draw()};
+$('undo').onclick=()=>{if(!hist.length)return msg('আর পূর্বাবস্থায় ফেরার ধাপ নেই।',1);comps=JSON.parse(hist.pop());comps.forEach(c=>delete c.res);SOL=null;$('out').hidden=true;$('sl').hidden=true;btok++;$('bd').hidden=true;hl=[];bad=[];updU();msg('পূর্বাবস্থায় ফেরানো হয়েছে।');draw()};
 function updU(){while(hist.length>10)hist.shift();$('undo').textContent='↩️ পূর্বাবস্থা ('+hist.length+'/10)'}updU();
 $('clr').onclick=()=>{if(comps.length){save();comps=[];msg('সব মুছে গেছে। ভুল হলে ↩️ পূর্বাবস্থা চাপো।');draw()}};
 $('ex').onclick=()=>{save();comps=[];addWire([3,2],[5,2]);comps.push({t:'r',a:[5,2],b:[9,2],val:4,n:1});addWire([9,2],[11,2]);
@@ -183,12 +181,14 @@ function drawComp(c){const x1=c.a[0]*S,y1=c.a[1]*S,x2=c.b[0]*S,y2=c.b[1]*S,L=Mat
  if(c.res&&c.t==='r'){const sp=.25+Math.min(Math.abs(c.res.s||0),4)*.2,dir=(c.res.s||0)>=0?1:-1,ux=(x2-x1)/L,uy=(y2-y1)/L;ctx.fillStyle=css('--acc');
   for(let k=0;k<5;k++){let u=(performance.now()/1000*sp*dir+k/5)%1;if(u<0)u+=1;ctx.beginPath();ctx.arc(x1+ux*L*u,y1+uy*L*u,4.5,0,7);ctx.fill()}}
  if(c.t==='w')return;if(c.t==='s'){ctx.font='600 17px "Noto Sans Bengali",system-ui,sans-serif';ctx.fillStyle=css('--mut');ctx.textAlign='center';ctx.fillText(c.on?'চালু':'বন্ধ',(x1+x2)/2,(y1+y2)/2-26);return}
- const mx=(x1+x2)/2,my=(y1+y2)/2,h=y1===y2;ctx.font='600 19px "Noto Sans Bengali",system-ui,sans-serif';ctx.fillStyle=ctx.strokeStyle;
- ctx.textAlign=h?'center':'left';const ox=h?0:18,oy=h?-26:-2;
+ const mx=(x1+x2)/2,my=(y1+y2)/2,h=y1===y2;ctx.font='600 17px "Noto Sans Bengali",system-ui,sans-serif';
+ const col1=ctx.strokeStyle;ctx.textAlign=h?'center':'left';const ox=h?0:16,oy=h?-24:-3;
  const l1=c.t==='r'?`R${c.n} = ${fmt(c.val)}Ω`:`${fmt(c.val)} V`;
- ctx.fillText(l1,mx+ox,my+oy);
- if(c.t==='v'){ctx.textAlign='center';const an=Math.atan2(y2-y1,x2-x1);ctx.fillText('+',x1+Math.cos(an)*(L/2-16)+Math.sin(an)*24,y1+Math.sin(an)*(L/2-16)-Math.cos(an)*24+6)}
- if(c.res){ctx.fillStyle=css('--acc');ctx.fillText(`${fmt(c.res.i)}A, ${fmt(c.res.v)}V`,mx+ox,my+oy+24)}}
+ ctx.save();ctx.lineWidth=5;ctx.strokeStyle=css('--card');ctx.lineJoin='round';
+ ctx.strokeText(l1,mx+ox,my+oy);ctx.fillStyle=col1;ctx.fillText(l1,mx+ox,my+oy);
+ if(c.t==='v'){ctx.textAlign='center';const an=Math.atan2(y2-y1,x2-x1),px=x1+Math.cos(an)*(L/2-16)-Math.sin(an)*18,py=y1+Math.sin(an)*(L/2-16)+Math.cos(an)*18+6;ctx.strokeText('+',px,py);ctx.fillText('+',px,py)}
+ if(c.res){const l2=`${fmt(c.res.i)}A, ${fmt(c.res.v)}V`;ctx.strokeText(l2,mx+ox,my+oy+21);ctx.fillStyle=css('--acc');ctx.fillText(l2,mx+ox,my+oy+21)}
+ ctx.restore()}
 function draw(){ctx.clearRect(0,0,cv.width,cv.height);
  if(bg){const k=Math.min(cv.width/bg.width,cv.height/bg.height),w=bg.width*k,h=bg.height*k;ctx.globalAlpha=.35;ctx.drawImage(bg,(cv.width-w)/2,(cv.height-h)/2,w,h);ctx.globalAlpha=1}
  ctx.fillStyle=css('--grid');
@@ -229,23 +229,69 @@ function solve(quiet){
  const it=-x[n],b0=bats[0];lastI=Math.abs(it);let tot=`<p class="big">ব্যাটারি থেকে মোট কারেন্ট: ${fmt(Math.abs(it))} A</p>`;
  if(m===1&&Math.abs(it)>1e-9)tot+=`<p class="big">সমতুল্য রোধ: ${fmt(b0.val/Math.abs(it))} Ω</p>`;
  if(Math.abs(it)<1e-9)tot+='<p>কারেন্ট শূন্য — সম্ভবত বর্তনী খোলা (open)।</p>';
- const o=$('out');o.classList.toggle('q',!!quiet);o.innerHTML=tot+`<table><tr><th>রোধ</th><th>মান</th><th>ভোল্টেজ</th><th>কারেন্ট</th><th>ক্ষমতা</th></tr>${rows}</table>`;o.hidden=false;
+ const o=$('out');o.classList.toggle('q',!!quiet);
+ const pdfBar=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div>${tot}</div><button id="pdfInline" class="go" type="button">📄 এই সমাধানের PDF ডাউনলোড করো</button></div>`;
+ o.innerHTML=pdfBar+`<table><tr><th>রোধ</th><th>মান</th><th>ভোল্টেজ</th><th>কারেন্ট</th><th>ক্ষমতা</th></tr>${rows}</table>`;o.hidden=false;
+ const pBtn=$('pdfInline');if(pBtn)pBtn.onclick=()=>downloadCurrentPDF();
+ const solCards=[],connList=[],nodeMap={};
  {const nm=p=>{const i=id(p);return i<0?'0':String.fromCharCode(65+i%26)};
+  comps.forEach(c=>{if(c.t==='r'||c.t==='v'){[c.a,c.b].forEach(pt=>{nodeMap[pt[0]+','+pt[1]]={pt,name:nm(pt),v:V(pt)}})}});
   let h='<h3 class="ex-h">ধাপে ধাপে গাণিতিক ব্যাখ্যা</h3><p class="ex-p">পদ্ধতি: প্রতিটি বিন্দুর বিভব (V) নির্ণয় করা হয়েছে কার্শফের কারেন্ট সূত্র দিয়ে (প্রতি বিন্দুতে ঢোকা কারেন্ট = বের হওয়া কারেন্ট)। ব্যাটারির ঋণাত্মক প্রান্ত ভূমি (0 V) ধরা হয়েছে। এরপর প্রতিটি রোধে ওহমের সূত্র প্রয়োগ।</p>';
-  res.forEach((r,k)=>{const va=V(r.a),vb=V(r.b),ad=Math.abs(va-vb),d=k*.08;
-   if(r.val===0){h+=`<div class='card' style='--d:${d}s'><b>R${r.n} = 0 Ω</b><p>রোধ শূন্য হওয়ায় এটি তারের মতো আচরণ করে, দুই প্রান্তের বিভব সমান।</p></div>`;return}
+  res.forEach((r,k)=>{const va=V(r.a),vb=V(r.b),ad=Math.abs(va-vb),d=k*.08,na=nm(r.a),nb=nm(r.b),rName=(r.bulb?'বাল্ব R':'R')+r.n;
+   r.res.na=na;r.res.nb=nb;r.res.va=va;r.res.vb=vb;
+   if(r.val===0){
+    h+=`<div class='card' style='--d:${d}s'><b>${rName} = 0 Ω</b><p>রোধ শূন্য হওয়ায় এটি তারের মতো আচরণ করে, দুই প্রান্তের বিভব সমান।</p></div>`;
+    solCards.push({title:`${rName} = 0 Ω (বিন্দু ${na} ও ${nb})`,lines:['রোধ শূন্য হওয়ায় এটি তারের মতো আচরণ করে এবং দুই প্রান্তের বিভব সমান থাকে।']});
+    return}
    const i=ad/r.val;
-   h+=`<div class='card' style='--d:${d}s'><b>R${r.n} = ${fmt(r.val)} Ω</b><p>১) বিভব: V<sub>${nm(r.a)}</sub> = ${fmt(va)} V, V<sub>${nm(r.b)}</sub> = ${fmt(vb)} V<br>২) বিভব পার্থক্য: V = |V<sub>${nm(r.a)}</sub> − V<sub>${nm(r.b)}</sub>| = |${fmt(va)} − ${fmt(vb)}| = <b>${fmt(ad)} V</b><br>৩) ওহমের সূত্র: I = V ÷ R = ${fmt(ad)} ÷ ${fmt(r.val)} = <b>${fmt(i)} A</b><br>৪) ক্ষমতা: P = V × I = ${fmt(ad)} × ${fmt(i)} = <b>${fmt(ad*i)} W</b></p></div>`});
+   h+=`<div class='card' style='--d:${d}s'><b>${rName} = ${fmt(r.val)} Ω</b><p>১) বিভব: V<sub>${na}</sub> = ${fmt(va)} V, V<sub>${nb}</sub> = ${fmt(vb)} V<br>২) বিভব পার্থক্য: V = |V<sub>${na}</sub> − V<sub>${nb}</sub>| = |${fmt(va)} − ${fmt(vb)}| = <b>${fmt(ad)} V</b><br>৩) ওহমের সূত্র: I = V ÷ R = ${fmt(ad)} ÷ ${fmt(r.val)} = <b>${fmt(i)} A</b><br>৪) ক্ষমতা: P = V × I = ${fmt(ad)} × ${fmt(i)} = <b>${fmt(ad*i)} W</b></p></div>`;
+   solCards.push({
+    title:`${rName} = ${fmt(r.val)} Ω  (বিন্দু ${na} থেকে ${nb})`,
+    lines:[
+     `১) দুই প্রান্তের বিভব: V_${na} = ${fmt(va)} V, V_${nb} = ${fmt(vb)} V`,
+     `২) বিভব পার্থক্য: V = |${fmt(va)} − ${fmt(vb)}| = ${fmt(ad)} V`,
+     `৩) ওহমের সূত্র: I = V ÷ R = ${fmt(ad)} ÷ ${fmt(r.val)} = ${fmt(i)} A`,
+     `৪) ব্যয়িত ক্ষমতা: P = V × I = ${fmt(ad)} × ${fmt(i)} = ${fmt(ad*i)} W`
+    ]
+   })});
   const P=res.reduce((s,r)=>s+(r.val?(V(r.a)-V(r.b))**2/r.val:0),0),Ps=bats.reduce((s,b,k)=>s+b.val*(-x[n+k]),0),dd=res.length*.08;
   if(m===1&&Math.abs(it)>1e-9)h+=`<div class='card' style='--d:${dd}s'><b>সমতুল্য রোধ</b><p>R<sub>eq</sub> = V ÷ I = ${fmt(b0.val)} ÷ ${fmt(Math.abs(it))} = <b>${fmt(b0.val/Math.abs(it))} Ω</b></p></div>`;
-  h+=`<div class='card' style='--d:${dd+.08}s'><b>যাচাই (শক্তির নিত্যতা)</b><p>সব রোধের মোট ক্ষমতা = ${fmt(P)} W<br>ব্যাটারি থেকে সরবরাহ = ${fmt(Ps)} W<br>${Math.abs(P-Ps)<1e-6*(1+Math.abs(Ps))?'দুটি সমান, সমাধান সঠিক ✓':'সামান্য পার্থক্য আছে, সংযোগ দেখো'}</p></div>`;
+  const vOk=Math.abs(P-Ps)<1e-6*(1+Math.abs(Ps));
+  h+=`<div class='card' style='--d:${dd+.08}s'><b>যাচাই (শক্তির নিত্যতা)</b><p>সব রোধের মোট ক্ষমতা = ${fmt(P)} W<br>ব্যাটারি থেকে সরবরাহ = ${fmt(Ps)} W<br>${vOk?'দুটি সমান, সমাধান সঠিক ✓':'সামান্য পার্থক্য আছে, সংযোগ দেখো'}</p></div>`;
   {const key=r=>{const p=f(K(r.a)),q=f(K(r.b));return p<q?p+'|'+q:q+'|'+p},gp={},dg={},nz=g=>g.map(r=>'R'+r.n).join(' ও ');let s='';
    res.forEach(r=>(gp[key(r)]=gp[key(r)]||[]).push(r));
    comps.forEach(c=>{if(c.t==='w'||c.t==='s')return;[c.a,c.b].forEach(p=>{const q=f(K(p));(dg[q]=dg[q]||[]).push(c)})});
-   Object.values(gp).forEach(g=>{if(g.length<2)return;const inv=g.reduce((t,r)=>t+(r.val?1/r.val:0),0);s+=`<p>🔀 ${nz(g)} <b>সমান্তরালে</b> আছে (দুই প্রান্তে একই বিভব-পার্থক্য ${fmt(Math.abs(V(g[0].a)-V(g[0].b)))} V)।<br>1/R<sub>eq</sub> = ${g.map(r=>'1/'+fmt(r.val)).join(' + ')} = ${fmt(inv)} → R<sub>eq</sub> = <b>${fmt(1/inv)} Ω</b></p>`});
-   Object.values(dg).forEach(g=>{if(g.length===2&&g[0].t==='r'&&g[1].t==='r'&&g[0]!==g[1])s+=`<p>🔗 ${nz(g)} <b>শ্রেণিতে</b> আছে (দুটিতেই একই কারেন্ট ${fmt(g[0].res.i)} A)।<br>R<sub>eq</sub> = ${fmt(g[0].val)} + ${fmt(g[1].val)} = <b>${fmt(g[0].val+g[1].val)} Ω</b></p>`});
+   Object.values(gp).forEach(g=>{if(g.length<2)return;const inv=g.reduce((t,r)=>t+(r.val?1/r.val:0),0),vGap=fmt(Math.abs(V(g[0].a)-V(g[0].b)));
+    s+=`<p>🔀 ${nz(g)} <b>সমান্তরালে</b> আছে (দুই প্রান্তে একই বিভব-পার্থক্য ${vGap} V)।<br>1/R<sub>eq</sub> = ${g.map(r=>'1/'+fmt(r.val)).join(' + ')} = ${fmt(inv)} → R<sub>eq</sub> = <b>${fmt(1/inv)} Ω</b></p>`;
+    connList.push(`সমান্তরাল সংযোগ: ${nz(g)} সমান্তরালে যুক্ত (উভয়ের দুই প্রান্তে একই বিভব পার্থক্য ${vGap} V)। সূত্র: 1/R_eq = ${g.map(r=>'1/'+fmt(r.val)).join(' + ')} = ${fmt(inv)}  ⇒  R_eq = ${fmt(1/inv)} Ω`)});
+   Object.values(dg).forEach(g=>{if(g.length===2&&g[0].t==='r'&&g[1].t==='r'&&g[0]!==g[1]){
+    s+=`<p>🔗 ${nz(g)} <b>শ্রেণিতে</b> আছে (দুটিতেই একই কারেন্ট ${fmt(g[0].res.i)} A)।<br>R<sub>eq</sub> = ${fmt(g[0].val)} + ${fmt(g[1].val)} = <b>${fmt(g[0].val+g[1].val)} Ω</b></p>`;
+    connList.push(`শ্রেণি সংযোগ: ${nz(g)} শ্রেণিতে যুক্ত (উভয়ের মধ্য দিয়ে একই তড়িৎ প্রবাহ ${fmt(g[0].res.i)} A প্রবাহিত হচ্ছে)। সূত্র: R_eq = ${fmt(g[0].val)} + ${fmt(g[1].val)} = ${fmt(g[0].val+g[1].val)} Ω`)}});
    if(s)h+=`<div class='card' style='--d:${res.length*.08+.04}s'><b>সংযোগ চেনা</b>${s}</div>`}
-  o.insertAdjacentHTML('beforeend',h)}
+  o.insertAdjacentHTML('beforeend',h);
+  SOL={
+   hasBg:!!bg,
+   batText:bats.map((b,i)=>'V'+(m>1?i+1:'')+' = '+fmt(b.val)+' V').join(', '),
+   resCount:res.length,
+   batCount:bats.length,
+   totalI:fmt(Math.abs(it))+' A',
+   req:m===1&&Math.abs(it)>1e-9?fmt(b0.val/Math.abs(it))+' Ω':'—',
+   reqFormula:m===1&&Math.abs(it)>1e-9?`R_eq = V ÷ I = ${fmt(b0.val)} V ÷ ${fmt(Math.abs(it))} A = ${fmt(b0.val/Math.abs(it))} Ω`:null,
+   totalP:fmt(Ps)+' W',
+   resP:fmt(P)+' W',
+   verifyOk:vOk,
+   nodes:Object.values(nodeMap),
+   tableRows:res.map(r=>({
+    name:(r.bulb?'বাল্ব R':'R')+r.n,
+    r:fmt(r.val)+' Ω',
+    v:fmt(r.res.v)+' V',
+    i:fmt(r.res.i)+' A',
+    p:fmt(r.res.v*r.res.i)+' W'
+   })),
+   connections:connList,
+   resCards:solCards,
+   steps:[]
+  }}
  {const Iab=Math.abs(it),Ps2=bats.reduce((s,b,k)=>s+b.val*(-x[n+k]),0),nmz=r=>(r.bulb?'বাল্ব ':'R')+r.n;
   const kf=r=>{const p=f(K(r.a)),q=f(K(r.b));return p<q?p+'|'+q:q+'|'+p},G={},D={};res.forEach(r=>(G[kf(r)]=G[kf(r)]||[]).push(r));
   comps.forEach(c=>{if(c.t==='w'||c.t==='s')return;[c.a,c.b].forEach(p=>{const q=f(K(p));(D[q]=D[q]||[]).push(c)})});
@@ -258,7 +304,7 @@ function solve(quiet){
   res.forEach(r=>{if(!r.val)return;const ad=r.res.v,i=ad/r.val;st.push({t:`ধাপ ${k++}: ${nmz(r)}-এর দুই প্রান্তে V = ${fmt(ad)} V, তাই I = V ÷ R = ${fmt(ad)} ÷ ${fmt(r.val)} = ${fmt(i)} A এবং P = V × I = ${fmt(ad)} × ${fmt(i)} = ${fmt(ad*i)} W।`,hl:[r]})});
   const Pp=res.reduce((s,r)=>s+(r.val?r.res.v*r.res.v/r.val:0),0);
   st.push({t:`ধাপ ${k++}: যাচাই — সব রোধের ক্ষমতা ${fmt(Pp)} W, ব্যাটারির সরবরাহ ${fmt(Ps2)} W${Math.abs(Pp-Ps2)<1e-6*(1+Math.abs(Ps2))?' (সমান ✓)। সমাধান শেষ।':'।'}`,hl:[]});
-  STP=st;SUM=[['মোট কারেন্ট',fmt(Iab)+' A'],['সমতুল্য রোধ',m===1&&Iab>1e-9?fmt(b0.val/Iab)+' Ω':'—'],['মোট ক্ষমতা',fmt(Ps2)+' W']];
+  STP=st;if(SOL)SOL.steps=st.map(x=>x.t);SUM=[['মোট কারেন্ট',fmt(Iab)+' A'],['সমতুল্য রোধ',m===1&&Iab>1e-9?fmt(b0.val/Iab)+' Ω':'—'],['মোট ক্ষমতা',fmt(Ps2)+' W']];
   board(st,!!quiet)}
  if(!quiet)buildSl();
  msg('সমাধান হয়েছে। প্রতিটি রোধের পাশে কারেন্ট ও ভোল্টেজ দেখানো হয়েছে।');draw()}
@@ -295,25 +341,62 @@ function cropUI(img){return new Promise(res=>{
 const loadImg=f=>new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=r.result};r.readAsDataURL(f)});
 function shrink(img){const k=Math.min(1,1024/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return new Promise(r=>c.toBlob(r,'image/jpeg',.85))}
 $('phx').onclick=()=>{bg=null;$('phx').hidden=true;draw()};
+function autoHealOpenEnds(){
+ let oe=openEnds(),guard=0;
+ while(oe.length>=2&&guard++<8){
+  let best=null,bd=1e9;
+  for(let i=0;i<oe.length;i++)for(let j=i+1;j<oe.length;j++){
+   const d=Math.abs(oe[i][0]-oe[j][0])+Math.abs(oe[i][1]-oe[j][1]);
+   if(d>0&&d<=6&&d<bd){bd=d;best=[oe[i],oe[j]]}
+  }
+  if(!best)break;
+  const [p,q]=best;
+  if(p[0]===q[0]||p[1]===q[1])addWire(p,q);
+  else{addWire(p,[q[0],p[1]]);addWire([q[0],p[1]],q)}
+  oe=openEnds();
+ }
+}
 $('fi').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
  const noAI='ছবি পড়ার সুবিধা এখানে পাওয়া যাচ্ছে না। ছবিটি পেছনে হালকা করে দেখানো হচ্ছে, তার ওপর দিয়ে এঁকে নাও।';
  let img;try{img=await loadImg(f)}catch(_){return msg('ছবিটি খোলা যায়নি।',1)}
  const cr=await cropUI(img);if(!cr)return msg('বাতিল করা হয়েছে।');img=cr;bg=img;$('phx').hidden=false;draw();
- try{const sample=window.claude&&await claude.use('sample');if(!sample)return msg(noAI+' [sample null]',1);
-  const lim=await sample.limits();if(!lim||!lim.images)return msg(noAI+' [images off]',1);
+ try{
+  let hasSavedKey=false;try{const sc=JSON.parse(localStorage.getItem('cs')||'{}');hasSavedKey=!!(sc&&sc.k)}catch(_){}
+  let sample=hasSavedKey?window.__localSample:(window.claude&&await claude.use('sample'))||window.__localSample;
+  if(!sample)return msg(noAI,1);
+  const lim=await sample.limits();if(!lim||!lim.images)sample=window.__localSample;
   msg('ছবি থেকে সার্কিট পড়া হচ্ছে, একটু অপেক্ষা করো...');
   const r=await sample.json(PROMPT,{images:[await shrink(img)]});
   const list=Array.isArray(r)?r:(r&&r.components)||[];
   const cl=(v,m)=>Math.max(0,Math.min(m,Math.round(+v)));
   const old=comps;comps=[];let n=0;
-  list.forEach(c=>{try{const a=[cl(c.a[0],COLS),cl(c.a[1],ROWS)],b=[cl(c.b[0],COLS),cl(c.b[1],ROWS)];
-   if(a[0]!==b[0]&&a[1]!==b[1])return;const len=Math.abs(b[0]-a[0])+Math.abs(b[1]-a[1]);if(!len)return;
-   if(c.t==='w')addWire(a,b);
-   else if(c.t==='r'&&len>=2&&+c.val>=0)comps.push({t:'r',a,b,val:+c.val,n:++n});
-   else if(c.t==='v'&&len>=2&&+c.val>0)comps.push({t:'v',a,b,val:+c.val})}catch(_){}});
+  list.forEach(c=>{try{
+   let a=[cl(c.a[0],COLS),cl(c.a[1],ROWS)],b=[cl(c.b[0],COLS),cl(c.b[1],ROWS)];
+   if(a[0]===b[0]&&a[1]===b[1])return;
+   if(c.t==='w'){
+    if(a[0]!==b[0]&&a[1]!==b[1]){const mid=[b[0],a[1]];addWire(a,mid);addWire(mid,b)}
+    else addWire(a,b);
+    return;
+   }
+   if(a[0]!==b[0]&&a[1]!==b[1]){
+    const dx=Math.abs(b[0]-a[0]),dy=Math.abs(b[1]-a[1]);
+    const mid=dx>=dy?[b[0],a[1]]:[a[0],b[1]];
+    addWire(mid,b);b=mid;
+   }
+   const len=Math.abs(b[0]-a[0])+Math.abs(b[1]-a[1]);if(!len)return;
+   if((c.t==='r'||c.t==='l')&&+c.val>=0)comps.push({t:'r',bulb:c.t==='l'||!!c.bulb,a,b,val:+c.val||10,n:++n});
+   else if(c.t==='v'&&+c.val>0)comps.push({t:'v',a,b,val:+c.val||12});
+   else if(c.t==='s')comps.push({t:'s',a,b,on:c.on!==false});
+  }catch(_){}});
   if(!comps.length){comps=old;return msg('ছবি থেকে সার্কিট বোঝা যায়নি। স্পষ্ট আলোয় আবার ছবি তুলে দেখো, অথবা পেছনের ছবি দেখে নিজে আঁকো।',1)}
-  hist.push(JSON.stringify(old));$('out').hidden=true;draw();
-  msg('ছবি থেকে সার্কিট বসানো হয়েছে। মান ও সংযোগ মিলিয়ে নাও, ভুল থাকলে ঠিক করে "সমাধান করো" চাপো।');
+  autoHealOpenEnds();
+  hist.push(JSON.stringify(old));SOL=null;$('out').hidden=true;draw();
+  if(!openEnds().length&&comps.some(c=>c.t==='v')&&comps.some(c=>c.t==='r')){
+   solve();
+   msg('ছবি থেকে সার্কিট বসানো ও সমাধান করা হয়েছে! এখন "📄 PDF" চাপলে এই সার্কিটের সমাধান ডাউনলোড হবে।');
+  }else{
+   msg('ছবি থেকে সার্কিট বসানো হয়েছে। মান ও সংযোগ মিলিয়ে "▶ সমাধান করো" চাপো।');
+  }
  }catch(err){msg('ছবি পড়া যায়নি'+(err&&err.code?' ('+err.code+')':'')+'। ছবিটি পেছনে দেখানো হচ্ছে, তার ওপর দিয়ে এঁকে নাও।',1)}};
 function openEnds(){const m={};comps.forEach(c=>[c.a,c.b].forEach(p=>{const k=p+'';m[k]=(m[k]||0)+1}));return Object.keys(m).filter(k=>m[k]===1).map(k=>k.split(',').map(Number))}
 function buildSl(){const s=$('sl'),cs=comps.filter(c=>c.t==='r'||c.t==='v');if(!cs.length){s.hidden=true;return}
@@ -329,9 +412,26 @@ $('qz').onclick=()=>{const R=[2,3,4,5,6,8,10,12,15,20],pk=a=>a[Math.random()*a.l
  preset(ty==='mix'?PS.mix(V0,pk(R),pk(R),pk(R)):PS[ty](V0,pk(R),pk(R)));solve(1);qa=lastI;comps.forEach(c=>delete c.res);$('out').hidden=true;$('sl').hidden=true;btok++;$('bd').hidden=true;hl=[];bad=[];
  $('qb').hidden=false;$('qt').textContent='ব্যাটারি থেকে মোট কারেন্ট কত অ্যাম্পিয়ার (A)? দশমিকে লেখো।';$('qi').value='';$('qr').textContent='';msg('কুইজ: রোধ ও ভোল্টেজ দেখে মোট কারেন্ট বের করো।');draw()};
 $('qok').onclick=()=>{const v=parseFloat($('qi').value);if(isNaN(v))return;const ok=Math.abs(v-qa)<=.02*qa+.005;tries++;if(ok)score++;$('qr').textContent=(ok?'✅ সঠিক!':'❌ ভুল, সঠিক উত্তর '+fmt(qa)+' A')+' · স্কোর '+score+'/'+tries;solve()};
-$('sv').onclick=async()=>{const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const q=c.getContext('2d');q.fillStyle=css('--card');q.fillRect(0,0,c.width,c.height);q.drawImage(cv,0,0);
- try{const d=window.claude&&await claude.use('downloads');if(!d)return msg('সেভ করার সুবিধা এখানে নেই, স্ক্রিনশট নাও।',1);const b=await new Promise(r=>c.toBlob(r,'image/png'));await d.save({filename:'circuit.png',data:b});msg('ছবি সেভ হয়েছে।')}catch(e){msg('সেভ করা যায়নি, স্ক্রিনশট নিতে পারো।',1)}};
-function mkPDF(jp,w,h){const en=new TextEncoder(),P=[],X=[];let off=0;const add=b=>{if(typeof b==='string')b=en.encode(b);P.push(b);off+=b.length};
+async function saveBlob(filename,blob){
+ try{
+  if(window.__localDownloads){await window.__localDownloads.save({filename,data:blob});return true}
+  const d=window.claude&&await claude.use('downloads');
+  if(d){await d.save({filename,data:blob});return true}
+ }catch(_){}
+ const a=document.createElement('a'),u=URL.createObjectURL(blob);
+ a.href=u;a.download=filename;document.body.appendChild(a);a.click();
+ setTimeout(()=>{URL.revokeObjectURL(u);a.remove()},1500);
+ return true;
+}
+$('sv').onclick=async()=>{
+ const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;
+ const q=c.getContext('2d');q.fillStyle=css('--card');q.fillRect(0,0,c.width,c.height);q.drawImage(cv,0,0);
+ try{const b=await new Promise(r=>c.toBlob(r,'image/png'));await saveBlob('circuit.png',b);msg('ছবি সেভ হয়েছে।')}
+ catch(e){msg('সেভ করা যায়নি, স্ক্রিনশট নিতে পারো।',1)}
+};
+function mkPDF(jp,w,h){
+ const en=new TextEncoder(),P=[],X=[];let off=0;
+ const add=b=>{if(typeof b==='string')b=en.encode(b);P.push(b);off+=b.length};
  const n=jp.length;add('%PDF-1.4\n');
  X[1]=off;add('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
  X[2]=off;add('2 0 obj\n<< /Type /Pages /Count '+n+' /Kids ['+jp.map((_,i)=>(3+3*i)+' 0 R').join(' ')+'] >>\nendobj\n');
@@ -339,59 +439,11 @@ function mkPDF(jp,w,h){const en=new TextEncoder(),P=[],X=[];let off=0;const add=
   X[p]=off;add(p+' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im '+(p+2)+' 0 R >> >> /Contents '+(p+1)+' 0 R >>\nendobj\n');
   X[p+1]=off;add((p+1)+' 0 obj\n<< /Length '+ct.length+' >>\nstream\n'+ct+'\nendstream\nendobj\n');
   X[p+2]=off;add((p+2)+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+w+' /Height '+h+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+b.length+' >>\nstream\n');add(b);add('\nendstream\nendobj\n')});
- const N=3*n+3,xo=off;add('xref\n0 '+N+'\n0000000000 65535 f \n');for(let i=1;i<N;i++)add(String(X[i]).padStart(10,'0')+' 00000 n \n');
- add('trailer\n<< /Size '+N+' /Root 1 0 R >>\nstartxref\n'+xo+'\n%%EOF');return new Blob(P,{type:'application/pdf'})}
-function repLines(){const L=[],o=$('out');
- const pl=el=>{const k=el.cloneNode(true);k.querySelectorAll('br').forEach(b=>b.replaceWith('\n'));k.querySelectorAll('sub').forEach(s=>s.replaceWith('_'+s.textContent));return k.textContent};
- [...o.children].forEach(n=>{
-  if(n.tagName==='TABLE'){n.querySelectorAll('tr').forEach(r=>L.push({k:'p',s:[...r.children].map(c=>c.textContent).join('  |  ')}));return}
-  if(n.classList.contains('card')){const b=n.querySelector('b');L.push({k:'b',s:b?b.textContent:''});n.querySelectorAll('p').forEach(p=>pl(p).split('\n').forEach(s=>{if(s.trim())L.push({k:'p',s})}));return}
-  if(n.tagName==='H3'){L.push({k:'h',s:n.textContent});return}
-  pl(n).split('\n').forEach(s=>{if(s.trim())L.push({k:n.classList.contains('big')?'b':'p',s})})});
- return L}
-function grab(title){draw();const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const q=c.getContext('2d');q.fillStyle='#fff';q.fillRect(0,0,c.width,c.height);q.drawImage(cv,0,0);return {title,img:c,lines:repLines(),steps:(STP||[]).map(x=>x.t),sum:SUM}}
-function buildPages(secs){const W=1240,H=1754,M=90,pages=[];let c,g,y;
- const np=()=>{c=document.createElement('canvas');c.width=W;c.height=H;g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);y=M;pages.push(c)};
- const fnt=(sz,w)=>{g.font=`${w} ${sz}px 'Noto Sans Bengali','Hind Siliguri',system-ui,sans-serif`};
- const line=(s,sz,w,col,ind)=>{fnt(sz,w);g.fillStyle=col;const lh=sz*1.65,out=[];let cur='';
-  s.split(' ').forEach(wd=>{const t=cur?cur+' '+wd:wd;if(g.measureText(t).width>W-2*M-ind&&cur){out.push(cur);cur=wd}else cur=t});out.push(cur);
-  out.forEach(o=>{if(y+lh>H-M){np();fnt(sz,w);g.fillStyle=col}g.fillText(o,M+ind,y+sz);y+=lh})};
- np();line('সার্কিট সমাধান ও ব্যাখ্যা',56,700,'#0f766e',0);y+=14;
- secs.forEach((sc,i)=>{if(i>0)np();line(sc.title,42,700,'#1d4ed8',0);y+=6;
-  const iw=W-2*M,ih=iw*sc.img.height/sc.img.width;if(y+ih>H-M)np();g.drawImage(sc.img,M,y,iw,ih);y+=ih+24;
-  sc.lines.forEach(l=>{if(l.k==='h')line(l.s,36,700,'#111',0);else if(l.k==='b')line(l.s,31,700,'#111',20);else line(l.s,28,400,'#333',20)})});
- return pages}
-function buildPages2(secs){const W=1240,H=1754,M=100,CW=W-2*M,INK='#1a1a1a',MID='#5b6460',LN='#dfe4e1',FL='#f4f7f5',AC='#0f766e',FN=`'Noto Sans Bengali','Hind Siliguri',system-ui,sans-serif`,pages=[];let c,g,y;
- const rr=(x,yy,w,h,r)=>{g.beginPath();if(g.roundRect)g.roundRect(x,yy,w,h,r);else g.rect(x,yy,w,h)};
- const np=()=>{c=document.createElement('canvas');c.width=W;c.height=H;g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);pages.push(c);
-  g.fillStyle=AC;g.fillRect(M,62,44,6);g.fillStyle=MID;g.font='500 24px '+FN;g.textAlign='left';g.fillText('সার্কিট সমাধান ও ব্যাখ্যা',M+60,76);g.fillStyle=LN;g.fillRect(M,100,CW,2);y=150};
- const wrap=(s,sz,w,wd)=>{g.font=w+' '+sz+'px '+FN;const o=[];let cur='';s.split(' ').forEach(t=>{const u=cur?cur+' '+t:t;if(g.measureText(u).width>wd&&cur){o.push(cur);cur=t}else cur=u});o.push(cur);return o};
- const need=h=>{if(y+h>H-120)np()};
- const txt=(s,sz,w,col,x,wd)=>{const lh=sz*1.7;wrap(s,sz,w,wd).forEach(o=>{need(lh);g.font=w+' '+sz+'px '+FN;g.fillStyle=col;g.textAlign='left';g.fillText(o,x,y+sz);y+=lh})};
- const lab=s=>{need(80);y+=18;g.font='600 25px '+FN;g.fillStyle=AC;g.textAlign='left';g.fillText(s,M,y+24);y+=48};
- np();
- secs.forEach((sc,i)=>{if(i>0)np();
-  g.font='600 24px '+FN;g.fillStyle=AC;g.textAlign='left';g.fillText(String(i+1).padStart(2,'0'),M,y+20);y+=40;
-  txt(sc.title,50,'700',INK,M,CW);y+=16;
-  const ih=CW*sc.img.height/sc.img.width;need(ih+20);rr(M,y,CW,ih,18);g.save();g.clip();g.drawImage(sc.img,M,y,CW,ih);g.restore();rr(M,y,CW,ih,18);g.strokeStyle=LN;g.lineWidth=2;g.stroke();y+=ih+30;
-  if(sc.sum&&sc.sum.length){need(150);const bw=(CW-40)/3;sc.sum.forEach((q,j)=>{const bx=M+j*(bw+20);rr(bx,y,bw,128,16);g.fillStyle=FL;g.fill();g.textAlign='left';g.fillStyle=MID;g.font='400 24px '+FN;g.fillText(q[0],bx+24,y+42);g.fillStyle=INK;g.font='700 44px '+FN;g.fillText(q[1],bx+24,y+102)});y+=142}
-  if(sc.steps&&sc.steps.length){lab('ধাপে ধাপে সমাধান');sc.steps.forEach(s=>{const L=wrap(s,29,'400',CW-44),h=L.length*49+8;need(h+14);g.fillStyle=AC;g.fillRect(M,y+6,4,h-8);L.forEach((o,k)=>{g.font='400 29px '+FN;g.fillStyle=INK;g.textAlign='left';g.fillText(o,M+28,y+29+k*49)});y+=h+14})}
-  if(sc.lines&&sc.lines.length){lab('বিস্তারিত ব্যাখ্যা');sc.lines.forEach(l=>{if(l.k==='h')return;if(l.k==='b'){y+=10;txt(l.s,29,'700',INK,M,CW)}else txt(l.s,26,'400',MID,M+20,CW-20)})}});
- pages.forEach((p,i)=>{const q=p.getContext('2d');q.fillStyle=MID;q.font='400 22px '+FN;q.textAlign='center';q.fillText((i+1)+' / '+pages.length,W/2,H-54)});
- return pages}
-async function pdfOut(secs,name){try{const d=window.claude&&await claude.use('downloads');if(!d)return msg('PDF সেভ করার সুবিধা এখানে নেই।',1);
-  const pg=buildPages2(secs),jb=c=>Uint8Array.from(atob(c.toDataURL('image/jpeg',.88).split(',')[1]),ch=>ch.charCodeAt(0));
-  await d.save({filename:name,data:mkPDF(pg.map(jb),pg[0].width,pg[0].height)});msg('PDF সেভ হয়েছে ('+pg.length+' পৃষ্ঠা)।')}catch(e){msg('PDF সেভ করা যায়নি।',1)}}
-$('pdf1').onclick=async()=>{if(!comps.length)return msg('আগে সার্কিট আঁকো।',1);
- if(!comps.some(c=>c.res)){solve();if(!comps.some(c=>c.res))return}
- const r=document.documentElement;r.dataset.theme='light';const s=grab('তোমার আঁকা সার্কিট');delete r.dataset.theme;draw();await pdfOut([s],'circuit-solution.pdf')};
-$('pdfa').onclick=async()=>{msg('PDF তৈরি হচ্ছে...');const bk=JSON.stringify(comps),had=comps.some(c=>c.res),r=document.documentElement,secs=[];r.dataset.theme='light';
- const ld=L=>{comps=[];L.forEach(q=>q[0]==='w'?addWire(q[1],q[2]):comps.push({t:q[0],a:q[1],b:q[2],val:q[3],n:q[4]}))};
- if(JSON.parse(bk).length){comps=JSON.parse(bk);comps.forEach(c=>delete c.res);solve(1);if(comps.some(c=>c.res))secs.push(grab('তোমার আঁকা সার্কিট'))}
- [['১) শ্রেণি সংযোগের উদাহরণ',PS.ser(12,4,6)],['২) সমান্তরাল সংযোগের উদাহরণ',PS.par(12,6,3)],['৩) মিশ্র সংযোগের উদাহরণ',PS.mix(12,4,6,3)]].forEach(([t,L])=>{ld(L);solve(1);secs.push(grab(t))});
- comps=JSON.parse(bk);bad=[];delete r.dataset.theme;
- if(had)solve();else{comps.forEach(c=>delete c.res);$('out').hidden=true;$('sl').hidden=true}
- draw();await pdfOut(secs,'circuit-all-examples.pdf')};
+ const N=3*n+3,xo=off;add('xref\n0 '+N+'\n0000000000 65535 f \n');
+ for(let i=1;i<N;i++)add(String(X[i]).padStart(10,'0')+' 00000 n \n');
+ add('trailer\n<< /Size '+N+' /Root 1 0 R >>\nstartxref\n'+xo+'\n%%EOF');
+ return new Blob(P,{type:'application/pdf'});
+}
 const slp=ms=>new Promise(r=>setTimeout(r,ms));
 async function board(st,instant){const ln=$('bl'),tok=++btok;ln.innerHTML='';hl=[];$('bd').hidden=false;bpause=false;$('bp').textContent='⏸ থামো';
  for(let i=0;i<st.length;i++){if(tok!==btok)return;const d=document.createElement('div');d.className='bs';ln.appendChild(d);const t=st[i].t;
@@ -406,42 +458,364 @@ $('bn').onclick=()=>{skip=true;bpause=false;$('bp').textContent='⏸ থাম�
 $('br').onclick=()=>{if(STP.length)board(STP,false)};
 $('hp').onclick=()=>{$('gd').hidden=false};$('gok').onclick=()=>{$('gd').hidden=true;try{localStorage.setItem('cg','1')}catch(_){}};
 try{if(!localStorage.getItem('cg'))$('gd').hidden=false}catch(_){$('gd').hidden=false}
-function mkPDF(jp,W,H){const enc=new TextEncoder(),parts=[],offs=[];let len=0;
- const push=d=>{const u=typeof d==='string'?enc.encode(d):d;parts.push(u);len+=u.length};
- const obj=(n,fn)=>{offs[n]=len;push(n+' 0 obj\n');fn();push('\nendobj\n')};
- const N=jp.length;push('%PDF-1.4\n');
- obj(1,()=>push('<</Type/Catalog/Pages 2 0 R>>'));
- obj(2,()=>push('<</Type/Pages/Count '+N+'/Kids['+jp.map((_,i)=>(5+3*i)+' 0 R').join(' ')+']>>'));
- jp.forEach((j,i)=>{const a=3+3*i,c='q 595 0 0 842 0 0 cm /I Do Q';
-  obj(a,()=>{push('<</Type/XObject/Subtype/Image/Width '+W+'/Height '+H+'/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length '+j.length+'>>\nstream\n');push(j);push('\nendstream')});
-  obj(a+1,()=>push('<</Length '+c.length+'>>\nstream\n'+c+'\nendstream'));
-  obj(a+2,()=>push('<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</XObject<</I '+a+' 0 R>>>>/Contents '+(a+1)+' 0 R>>'))});
- const x=len,T=3*N+3;push('xref\n0 '+T+'\n0000000000 65535 f \n');
- for(let n=1;n<T;n++)push(String(offs[n]).padStart(10,'0')+' 00000 n \n');
- push('trailer\n<</Size '+T+'/Root 1 0 R>>\nstartxref\n'+x+'\n%%EOF');
- return new Blob(parts,{type:'application/pdf'})}
-async function report(items){const W=1240,H=1754,M=80,pages=[],F='"Noto Sans Bengali","Hind Siliguri","Kalpurush",system-ui,sans-serif';let c,g,y;
- const np=()=>{c=document.createElement('canvas');c.width=W;c.height=H;g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);g.textBaseline='top';y=M;pages.push(c)};
- const put=(t,sz,col,b)=>{const font=(b?'700 ':'400 ')+sz+'px '+F;g.font=font;const out=[];let cu='';
-  t.split(' ').forEach(w=>{const tt=cu?cu+' '+w:w;if(g.measureText(tt).width>W-2*M&&cu){out.push(cu);cu=w}else cu=tt});out.push(cu);
-  out.forEach(s=>{if(y+sz*1.6>H-M)np();g.font=font;g.fillStyle=col||'#111';g.fillText(s,M,y);y+=sz*1.6})};
- items.forEach(it=>{np();put(it.title,40,'#0f766e',1);y+=10;const w=W-2*M,h=w*it.img.height/it.img.width;g.drawImage(it.img,M,y,w,h);g.strokeStyle='#ddd';g.lineWidth=2;g.strokeRect(M,y,w,h);y+=h+30;
-  it.text.forEach(s=>{if(!s){y+=12;return}put(s,26)})});
- const jp=[];for(const p of pages){const b=await new Promise(r=>p.toBlob(r,'image/jpeg',.88));jp.push(new Uint8Array(await b.arrayBuffer()))}
- return mkPDF(jp,W,H)}
-function snap1(){const root=document.documentElement,b0=bg;bg=null;root.dataset.theme='light';draw();const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const q=c.getContext('2d');q.fillStyle='#fff';q.fillRect(0,0,c.width,c.height);q.drawImage(cv,0,0);delete root.dataset.theme;bg=b0;draw();return c}
-function outText(){const n=$('out').cloneNode(true);n.querySelectorAll('sub').forEach(e=>e.replaceWith('_'+e.textContent));n.querySelectorAll('br').forEach(e=>e.replaceWith('\n'));
- n.querySelectorAll('td,th').forEach(e=>e.after('   '));n.querySelectorAll('p,div,h3,tr').forEach(e=>{e.before('\n');e.after('\n')});
- return n.textContent.split('\n').map(s=>s.trim()).filter((s,i,a)=>s||a[i-1])}
-async function makePDF(all){try{const d=window.claude&&await claude.use('downloads');if(!d)return msg('PDF সেভের সুবিধা এখানে নেই। লিংকটি ফোনের ব্রাউজারে খুলে চেষ্টা করো।',1);
-  msg('PDF তৈরি হচ্ছে, একটু অপেক্ষা করো...');await new Promise(r=>setTimeout(r,40));
-  const keep=JSON.stringify(comps),had=comps.some(c=>c.res),items=[],grab=t=>items.push({title:t,img:snap1(),text:outText()});
-  if(comps.some(c=>c.t==='v')&&comps.some(c=>c.t==='r')){comps.forEach(c=>delete c.res);solve();if(comps.some(c=>c.res))grab('আপনার সার্কিট')}
-  if(all)[['শ্রেণি সংযোগ',PS.ser(12,4,6)],['সমান্তরাল সংযোগ',PS.par(12,6,3)],['মিশ্র সংযোগ',PS.mix(12,4,6,3)]].forEach(([t,L])=>{comps=[];L.forEach(q=>q[0]==='w'?addWire(q[1],q[2]):comps.push({t:q[0],a:q[1],b:q[2],val:q[3],n:q[4]}));solve();grab('উদাহরণ: '+t)});
-  comps=JSON.parse(keep);if(had)solve();else{comps.forEach(c=>delete c.res);$('out').hidden=true;$('sl').hidden=true;draw()}
-  if(!items.length)return msg('PDF-এর জন্য আগে ব্যাটারি ও রোধসহ একটি বদ্ধ বর্তনী আঁকো।',1);
-  await d.save({filename:all?'circuit-all.pdf':'circuit-solution.pdf',data:await report(items)});msg('PDF সেভ হয়েছে।')}catch(e){msg('PDF সেভ করা যায়নি।',1)}}
-$('pdf1').onclick=()=>makePDF(false);$('pdf2').onclick=()=>makePDF(true);
+
+function bnNum(v){return String(v).replace(/[0-9]/g,d=>'০১২৩৪৫৬৭৮৯'[+d])}
+function snapCircuitClean(nodes){
+ const root=document.documentElement,prevTheme=root.dataset.theme,b0=bg,hl0=hl,bad0=bad;
+ bg=null;hl=[];bad=[];root.dataset.theme='light';draw();
+ const full=document.createElement('canvas');full.width=cv.width;full.height=cv.height;
+ const fq=full.getContext('2d');fq.fillStyle='#ffffff';fq.fillRect(0,0,full.width,full.height);
+ fq.drawImage(cv,0,0);
+ if(nodes&&nodes.length){
+  nodes.forEach(nd=>{
+   const nx=nd.pt[0]*S,ny=nd.pt[1]*S;
+   fq.save();
+   fq.beginPath();fq.arc(nx,ny,12,0,Math.PI*2);
+   fq.fillStyle=nd.name==='0'?'#1e293b':'#0f766e';fq.fill();
+   fq.lineWidth=2.5;fq.strokeStyle='#ffffff';fq.stroke();
+   fq.font='700 12px "Noto Sans Bengali",system-ui,sans-serif';
+   fq.fillStyle='#ffffff';fq.textAlign='center';fq.textBaseline='middle';
+   fq.fillText(nd.name==='0'?'0V':nd.name,nx,ny+1);
+   fq.restore();
+  });
+ }
+ if(prevTheme)root.dataset.theme=prevTheme;else delete root.dataset.theme;
+ bg=b0;hl=hl0;bad=bad0;draw();
+ // Crop tightly around the drawn circuit with generous margin so it looks crisp and large in the PDF
+ let minX=COLS,minY=ROWS,maxX=0,maxY=0;
+ comps.forEach(c=>{
+  minX=Math.min(minX,c.a[0],c.b[0]);minY=Math.min(minY,c.a[1],c.b[1]);
+  maxX=Math.max(maxX,c.a[0],c.b[0]);maxY=Math.max(maxY,c.a[1],c.b[1]);
+ });
+ const padX=135,padTop=75,padBot=65;
+ const sx=Math.max(0,minX*S-padX),sy=Math.max(0,minY*S-padTop);
+ const ex=Math.min(full.width,maxX*S+padX),ey=Math.min(full.height,maxY*S+padBot);
+ const cw=Math.max(320,ex-sx),ch=Math.max(200,ey-sy);
+ const out=document.createElement('canvas');out.width=cw;out.height=ch;
+ const oq=out.getContext('2d');oq.fillStyle='#ffffff';oq.fillRect(0,0,cw,ch);
+ oq.drawImage(full,sx,sy,cw,ch,0,0,cw,ch);
+ return out;
+}
+function buildStyledPDF(sol,circuitCanvas,bgImg){
+ const W=1240,H=1754,M=72,CW=W-2*M,pages=[];
+ const FN='"Noto Sans Bengali","Hind Siliguri","Kalpurush",system-ui,sans-serif';
+ const INK='#0f172a',MUT='#475569',TEAL='#0f766e',BLUE='#1d4ed8',AMB='#b45309',GRN='#047857',LN='#cbd5e1';
+ let c,g,y=0;
+ const rr=(x,yy,w,h,r)=>{
+  g.beginPath();
+  if(g.roundRect)g.roundRect(x,yy,w,h,r);
+  else{
+   const k=Math.min(r,w/2,h/2);
+   g.moveTo(x+k,yy);g.arcTo(x+w,yy,x+w,yy+h,k);g.arcTo(x+w,yy+h,x,yy+h,k);g.arcTo(x,yy+h,x,yy,k);g.arcTo(x,yy,x+w,yy,k);g.closePath();
+  }
+ };
+ const wrap=(txt,sz,wt,maxW)=>{
+  g.font=`${wt} ${sz}px ${FN}`;
+  const words=String(txt||'').split(/\s+/),lines=[];let cur='';
+  words.forEach(w=>{
+   const test=cur?cur+' '+w:w;
+   if(g.measureText(test).width>maxW&&cur){lines.push(cur);cur=w}
+   else cur=test;
+  });
+  if(cur)lines.push(cur);
+  return lines.length?lines:[''];
+ };
+ const newPage=(first)=>{
+  c=document.createElement('canvas');c.width=W;c.height=H;
+  g=c.getContext('2d');
+  g.fillStyle='#ffffff';g.fillRect(0,0,W,H);
+  const topGrad=g.createLinearGradient(0,0,W,0);
+  topGrad.addColorStop(0,TEAL);topGrad.addColorStop(1,BLUE);
+  g.fillStyle=topGrad;g.fillRect(0,0,W,12);
+  pages.push(c);
+  if(first){
+   rr(M,42,CW,124,20);
+   const bgGrad=g.createLinearGradient(M,42,M+CW,166);
+   bgGrad.addColorStop(0,'#0f766e');bgGrad.addColorStop(0.55,'#0d9488');bgGrad.addColorStop(1,'#1d4ed8');
+   g.fillStyle=bgGrad;g.fill();
+   g.save();rr(M,42,CW,124,20);g.clip();
+   g.fillStyle='rgba(255,255,255,0.08)';
+   g.beginPath();g.arc(M+CW-90,64,105,0,Math.PI*2);g.fill();
+   g.beginPath();g.arc(M+CW-220,160,70,0,Math.PI*2);g.fill();
+   g.restore();
+   g.fillStyle='#ffffff';g.font=`700 36px ${FN}`;g.textAlign='left';
+   g.fillText('তড়িৎ বর্তনী সমাধান ও গাণিতিক ব্যাখ্যা',M+32,96);
+   g.fillStyle='#e0f2fe';g.font=`500 21px ${FN}`;
+   g.fillText((bgImg?'আপলোড করা সার্কিটের':'আঁকা সার্কিটের')+' সম্পূর্ণ ধাপে ধাপে বিশ্লেষণ প্রতিবেদন',M+32,136);
+   const pillTxt=`ব্যাটারি: ${sol.batText}  •  রোধ: ${bnNum(sol.resCount)}টি`;
+   g.font=`600 19px ${FN}`;
+   const pw=Math.min(440,g.measureText(pillTxt).width+34);
+   rr(M+CW-pw-26,80,pw,46,23);
+   g.fillStyle='rgba(255,255,255,0.18)';g.fill();
+   g.fillStyle='#ffffff';g.textAlign='center';
+   g.fillText(pillTxt,M+CW-26-pw/2,110);
+   g.textAlign='left';
+   y=188;
+  }else{
+   g.fillStyle=TEAL;rr(M,42,10,32,5);g.fill();
+   g.fillStyle=INK;g.font=`700 23px ${FN}`;g.textAlign='left';
+   g.fillText('তড়িৎ বর্তনী সমাধান ও গাণিতিক ব্যাখ্যা (চলমান পৃষ্ঠা)',M+22,66);
+   g.fillStyle='#e2e8f0';g.fillRect(M,84,CW,2);
+   y=108;
+  }
+ };
+ const need=h=>{if(y+h>H-86)newPage(false)};
+ const secHead=(numStr,title,color=TEAL,minNext=160)=>{
+  need(58+minNext);
+  y+=6;
+  rr(M,y,44,36,10);g.fillStyle=color;g.fill();
+  g.fillStyle='#ffffff';g.font=`700 20px ${FN}`;g.textAlign='center';
+  g.fillText(numStr,M+22,y+25);
+  g.fillStyle=INK;g.font=`700 27px ${FN}`;g.textAlign='left';
+  g.fillText(title,M+58,y+27);
+  g.fillStyle='#e2e8f0';g.fillRect(M,y+44,CW,2);
+  y+=58;
+ };
+
+ newPage(true);
+
+ // Section 1: Circuit Diagram
+ secHead('০১',bgImg?'আপলোড করা ছবি ও সমাধানকৃত বর্তনী চিত্র':'সমাধানকৃত বর্তনী চিত্র (কারেন্ট, ভোল্টেজ ও বিন্দুসহ)',TEAL,340);
+ if(bgImg){
+  const boxH=340,colW=(CW-24)/2;
+  need(boxH+14);
+  rr(M,y,colW,boxH,16);g.fillStyle='#f8fafc';g.fill();g.lineWidth=2;g.strokeStyle=LN;g.stroke();
+  rr(M,y,colW,42,16);g.fillStyle='#eff6ff';g.fill();
+  g.fillStyle=BLUE;g.font=`700 20px ${FN}`;g.textAlign='center';
+  g.fillText('📷 আপলোড করা মূল সার্কিট',M+colW/2,y+28);
+  const pad=14,aw=colW-2*pad,ah=boxH-54,sc1=Math.min(aw/bgImg.width,ah/bgImg.height),dw1=bgImg.width*sc1,dh1=bgImg.height*sc1;
+  g.drawImage(bgImg,M+(colW-dw1)/2,y+46+(ah-dh1)/2,dw1,dh1);
+
+  const rx=M+colW+24;
+  rr(rx,y,colW,boxH,16);g.fillStyle='#ffffff';g.fill();g.lineWidth=2;g.strokeStyle=LN;g.stroke();
+  rr(rx,y,colW,42,16);g.fillStyle='#f0fdfa';g.fill();
+  g.fillStyle=TEAL;g.font=`700 20px ${FN}`;g.textAlign='center';
+  g.fillText('⚡ গ্রিডে সমাধানকৃত বর্তনী চিত্র',rx+colW/2,y+28);
+  const sc2=Math.min(aw/circuitCanvas.width,ah/circuitCanvas.height),dw2=circuitCanvas.width*sc2,dh2=circuitCanvas.height*sc2;
+  g.drawImage(circuitCanvas,rx+(colW-dw2)/2,y+46+(ah-dh2)/2,dw2,dh2);
+  g.textAlign='left';
+  y+=boxH+18;
+ }else{
+  const maxW=CW-48,maxH=330,sc=Math.min(maxW/circuitCanvas.width,maxH/circuitCanvas.height,1.35);
+  const imgW=Math.round(circuitCanvas.width*sc),imgH=Math.round(circuitCanvas.height*sc),boxH=imgH+58;
+  need(boxH+14);
+  rr(M,y,CW,boxH,16);g.fillStyle='#ffffff';g.fill();g.lineWidth=2;g.strokeStyle=LN;g.stroke();
+  rr(M,y,CW,42,16);g.fillStyle='#f0fdfa';g.fill();
+  g.fillStyle=TEAL;g.font=`700 19px ${FN}`;g.textAlign='center';
+  g.fillText('বর্তনীর সংযোগ বিন্দু (A, B, ... ও 0V ভূমি) এবং প্রতিটি রোধে প্রবাহিত কারেন্ট ও ভোল্টেজ',M+CW/2,y+28);
+  g.drawImage(circuitCanvas,M+(CW-imgW)/2,y+48,imgW,imgH);
+  g.textAlign='left';
+  y+=boxH+18;
+ }
+
+ // Section 2: Key Summary Cards
+ secHead('০২','একনজরে মূল ফলাফল',TEAL,130);
+ const cards3=[
+  {label:'মোট তড়িৎ প্রবাহ (I)',val:sol.totalI,sub:'ব্যাটারি হতে নির্গত প্রবাহ',bg:'#f0fdfa',bd:'#5eead4',ac:TEAL},
+  {label:'সমতুল্য রোধ (R_eq)',val:sol.req,sub:'বর্তনীর মোট তুল্য রোধ',bg:'#eff6ff',bd:'#93c5fd',ac:BLUE},
+  {label:'মোট তড়িৎ ক্ষমতা (P)',val:sol.totalP,sub:'সম্পূর্ণ বর্তনীতে ব্যয়িত ক্ষমতা',bg:'#fffbeb',bd:'#fcd34d',ac:AMB}
+ ];
+ const cw3=(CW-32)/3;
+ cards3.forEach((cd,idx)=>{
+  const cx=M+idx*(cw3+16);
+  rr(cx,y,cw3,114,14);g.fillStyle=cd.bg;g.fill();g.lineWidth=2;g.strokeStyle=cd.bd;g.stroke();
+  rr(cx,y,cw3,7,14);g.fillStyle=cd.ac;g.fill();
+  g.fillStyle=MUT;g.font=`600 20px ${FN}`;g.textAlign='left';
+  g.fillText(cd.label,cx+18,y+34);
+  g.fillStyle=cd.ac;g.font=`700 35px ${FN}`;
+  g.fillText(cd.val,cx+18,y+76);
+  g.fillStyle=MUT;g.font=`400 16px ${FN}`;
+  g.fillText(cd.sub,cx+18,y+100);
+ });
+ y+=130;
+
+ // Section 3: Component Table
+ const cols=[
+  {title:'উপাদান (রোধ)',w:Math.round(CW*0.22)},
+  {title:'মান (R)',w:Math.round(CW*0.19)},
+  {title:'বিভব পার্থক্য (V)',w:Math.round(CW*0.21)},
+  {title:'তড়িৎ প্রবাহ (I)',w:Math.round(CW*0.19)},
+  {title:'ক্ষমতা (P)',w:CW-Math.round(CW*0.22)-Math.round(CW*0.19)-Math.round(CW*0.21)-Math.round(CW*0.19)}
+ ];
+ const rowH=46,headH=50;
+ secHead('০৩','প্রতিটি রোধের কারেন্ট, ভোল্টেজ ও ক্ষমতার সারণি',TEAL,headH+rowH*Math.min(2,sol.tableRows.length));
+ const drawTableHeader=()=>{
+  rr(M,y,CW,headH,10);g.fillStyle=TEAL;g.fill();
+  let tx=M;
+  cols.forEach((cl,ci)=>{
+   g.fillStyle='#ffffff';g.font=`700 21px ${FN}`;g.textAlign='left';
+   g.fillText(cl.title,tx+16,y+32);
+   tx+=cl.w;
+   if(ci<cols.length-1){g.fillStyle='rgba(255,255,255,0.25)';g.fillRect(tx,y+8,1.5,headH-16)}
+  });
+  y+=headH;
+ };
+ drawTableHeader();
+ sol.tableRows.forEach((rw,ri)=>{
+  if(y+rowH>H-86){newPage(false);drawTableHeader()}
+  g.fillStyle=ri%2===0?'#ffffff':'#f0fdfa';
+  g.fillRect(M,y,CW,rowH);
+  g.strokeStyle='#cbd5e1';g.lineWidth=1.5;g.strokeRect(M,y,CW,rowH);
+  const vals=[rw.name,rw.r,rw.v,rw.i,rw.p];
+  let tx=M;
+  vals.forEach((v,ci)=>{
+   g.fillStyle=ci===0?TEAL:INK;
+   g.font=`${ci===0?'700':'600'} 21px ${FN}`;
+   g.textAlign='left';
+   g.fillText(v,tx+16,y+30);
+   tx+=cols[ci].w;
+   if(ci<cols.length-1){g.fillStyle='#e2e8f0';g.fillRect(tx,y,1.5,rowH)}
+  });
+  y+=rowH;
+ });
+ y+=18;
+
+ // Section 4: Series / Parallel Connection Analysis (if any)
+ let nextSecNum=4;
+ if(sol.connections&&sol.connections.length){
+  secHead('০'+bnNum(nextSecNum++),'সংযোগ বিশ্লেষণ (শ্রেণি ও সমান্তরাল চেনা)',BLUE,110);
+  sol.connections.forEach(cn=>{
+   const lines=wrap(cn,22,'500',CW-48),bh=lines.length*34+22;
+   need(bh+10);
+   rr(M,y,CW,bh,12);g.fillStyle='#eff6ff';g.fill();g.lineWidth=1.5;g.strokeStyle='#93c5fd';g.stroke();
+   rr(M,y,7,bh,4);g.fillStyle=BLUE;g.fill();
+   lines.forEach((ln,li)=>{
+    g.fillStyle=INK;g.font=`500 22px ${FN}`;g.textAlign='left';
+    g.fillText(ln,M+24,y+30+li*34);
+   });
+   y+=bh+10;
+  });
+  y+=8;
+ }
+
+ // Section 5: Board Step-by-Step Solution (লিখে লিখে সমাধান)
+ if(sol.steps&&sol.steps.length){
+  secHead('০'+bnNum(nextSecNum++),'লিখে লিখে ধাপে ধাপে সমাধান',TEAL,110);
+  sol.steps.forEach(st=>{
+   const lines=wrap(st,22,'500',CW-48),bh=lines.length*34+20;
+   need(bh+10);
+   rr(M,y,CW,bh,10);g.fillStyle='#f8fafc';g.fill();g.lineWidth=1.5;g.strokeStyle='#cbd5e1';g.stroke();
+   rr(M,y,6,bh,3);g.fillStyle=TEAL;g.fill();
+   lines.forEach((ln,li)=>{
+    g.fillStyle=INK;g.font=`500 22px ${FN}`;g.textAlign='left';
+    g.fillText(ln,M+22,y+28+li*34);
+   });
+   y+=bh+8;
+  });
+  y+=10;
+ }
+
+ // Section 6: Detailed Mathematical Explanation per Resistor (2-column grid for compact balance!)
+ secHead('০'+bnNum(nextSecNum++),'ধাপে ধাপে গাণিতিক ব্যাখ্যা ও সূত্রের প্রয়োগ',AMB,220);
+ const mNote='পদ্ধতি: কার্শফের কারেন্ট সূত্র (KCL) অনুসারে প্রতিটি সংযোগ বিন্দুর বিভব (V) নির্ণয় করা হয়েছে (যেখানে ব্যাটারির ঋণাত্মক প্রান্ত ভূমি বা 0 V)। এরপর প্রতিটি রোধের দুই প্রান্তের বিভব পার্থক্য থেকে ওহমের সূত্র (I = V ÷ R) ও ক্ষমতার সূত্র (P = V × I) প্রয়োগ করা হয়েছে।';
+ const mLines=wrap(mNote,20,'400',CW-36),mH=mLines.length*31+18;
+ need(mH+12);
+ rr(M,y,CW,mH,10);g.fillStyle='#f1f5f9';g.fill();
+ mLines.forEach((ln,li)=>{
+  g.fillStyle=MUT;g.font=`400 20px ${FN}`;g.textAlign='left';
+  g.fillText(ln,M+18,y+26+li*31);
+ });
+ y+=mH+14;
+
+ const use2Col=sol.resCards.length>=2;
+ if(use2Col){
+  const colW=(CW-20)/2;
+  for(let i=0;i<sol.resCards.length;i+=2){
+   const pair=sol.resCards.slice(i,i+2);
+   const prep=pair.map(rc=>{
+    const wl=[];
+    rc.lines.forEach(l=>wrap(l,20,'500',colW-32).forEach(x=>wl.push(x)));
+    return {title:rc.title,wl,h:44+wl.length*32+18};
+   });
+   const rowCardH=Math.max(...prep.map(p=>p.h));
+   need(rowCardH+14);
+   prep.forEach((p,pi)=>{
+    const cx=M+pi*(colW+20),w=pair.length===1?CW:colW;
+    rr(cx,y,w,rowCardH,12);g.fillStyle='#ffffff';g.fill();g.lineWidth=1.6;g.strokeStyle='#cbd5e1';g.stroke();
+    rr(cx,y,w,42,12);g.fillStyle='#fef3c7';g.fill();
+    g.fillStyle='#92400e';g.font=`700 21px ${FN}`;g.textAlign='left';
+    g.fillText('📐 '+p.title,cx+16,y+28);
+    p.wl.forEach((ln,li)=>{
+     g.fillStyle=INK;g.font=`500 20px ${FN}`;
+     g.fillText(ln,cx+18,y+68+li*32);
+    });
+   });
+   y+=rowCardH+14;
+  }
+ }else{
+  sol.resCards.forEach(rc=>{
+   const wrappedLines=[];
+   rc.lines.forEach(l=>wrap(l,22,'500',CW-44).forEach(wl=>wrappedLines.push(wl)));
+   const cardH=46+wrappedLines.length*34+18;
+   need(cardH+14);
+   rr(M,y,CW,cardH,12);g.fillStyle='#ffffff';g.fill();g.lineWidth=1.6;g.strokeStyle='#cbd5e1';g.stroke();
+   rr(M,y,CW,42,12);g.fillStyle='#fef3c7';g.fill();
+   g.fillStyle='#92400e';g.font=`700 22px ${FN}`;g.textAlign='left';
+   g.fillText('📐 '+rc.title,M+18,y+29);
+   wrappedLines.forEach((wl,li)=>{
+    g.fillStyle=INK;g.font=`500 22px ${FN}`;
+    g.fillText(wl,M+20,y+72+li*34);
+   });
+   y+=cardH+14;
+  });
+ }
+
+ // Equivalent Resistance & Verification Box
+ const vLines=[
+  ...(sol.reqFormula?[`সমতুল্য রোধ: ${sol.reqFormula}`]:[]),
+  `সব রোধের মোট ব্যয়িত ক্ষমতা: P_resistors = ${sol.resP}   |   ব্যাটারি থেকে সরবরাহকৃত ক্ষমতা: P_battery = ${sol.totalP}`,
+  sol.verifyOk?'✓ যাচাই সফল: ব্যয়িত ক্ষমতা ও সরবরাহকৃত ক্ষমতা সমান (শক্তির নিত্যতা সূত্র প্রমাণিত)।':'সতর্কতা: ক্ষমতার সামান্য পার্থক্য রয়েছে, বর্তনীর সংযোগ পরীক্ষা করো।'
+ ];
+ const vH=44+vLines.length*33+16;
+ need(vH+12);
+ rr(M,y,CW,vH,12);g.fillStyle='#ecfdf5';g.fill();g.lineWidth=2;g.strokeStyle='#6ee7b7';g.stroke();
+ rr(M,y,CW,40,12);g.fillStyle='#d1fae5';g.fill();
+ g.fillStyle=GRN;g.font=`700 21px ${FN}`;g.textAlign='left';
+ g.fillText('✅ সমতুল্য রোধ ও শক্তির নিত্যতা যাচাই',M+18,y+27);
+ vLines.forEach((vl,li)=>{
+  g.fillStyle=li===vLines.length-1?GRN:INK;
+  g.font=`${li===vLines.length-1?'700':'500'} 21px ${FN}`;
+  g.fillText(vl,M+20,y+68+li*33);
+ });
+ y+=vH+14;
+
+ // Footers on every page
+ pages.forEach((p,idx)=>{
+  const q=p.getContext('2d');
+  q.fillStyle='#e2e8f0';q.fillRect(M,H-64,CW,2);
+  q.fillStyle=MUT;q.font=`500 19px ${FN}`;
+  q.textAlign='left';
+  q.fillText('সার্কিট আঁকো ও সমাধান করো • শিক্ষার্থী ও শিক্ষকের জন্য স্বয়ংক্রিয় সমাধান প্রতিবেদন',M,H-32);
+  q.textAlign='right';
+  q.fillText(`পৃষ্ঠা ${bnNum(idx+1)} / ${bnNum(pages.length)}`,M+CW,H-32);
+ });
+ return pages;
+}
+
+async function downloadCurrentPDF(){
+ if(!comps.length)return msg('PDF ডাউনলোড করার আগে একটি সার্কিট আঁকো অথবা ছবি আপলোড করো।',1);
+ if(!SOL||!comps.some(c=>c.res)){
+  solve(1);
+  if(!SOL||!comps.some(c=>c.res))return;
+ }
+ try{
+  msg('সুন্দর ডিজাইনের PDF তৈরি হচ্ছে, একটু অপেক্ষা করো...');
+  await slp(30);
+  const circuitCanvas=snapCircuitClean(SOL.nodes);
+  const pages=buildStyledPDF(SOL,circuitCanvas,bg);
+  const jp=[];
+  for(const p of pages){
+   const b=await new Promise(r=>p.toBlob(r,'image/jpeg',0.92));
+   jp.push(new Uint8Array(await b.arrayBuffer()));
+  }
+  const pdfBlob=mkPDF(jp,pages[0].width,pages[0].height);
+  await saveBlob('circuit-solution-report.pdf',pdfBlob);
+  msg(`তোমার সার্কিটের সমাধান ও ব্যাখ্যার PDF ডাউনলোড হয়েছে (${bnNum(pages.length)} পৃষ্ঠা)।`);
+ }catch(e){
+  msg('PDF ডাউনলোড করা যায়নি। আবার চেষ্টা করো।',1);
+ }
+}
+$('pdf1').onclick=()=>downloadCurrentPDF();
 (function tick(){if((bad.length||comps.some(c=>c.res))&&!start)draw();requestAnimationFrame(tick)})();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
 draw();
